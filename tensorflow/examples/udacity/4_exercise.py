@@ -3,6 +3,7 @@
 import cPickle as pickle
 import numpy as np
 import tensorflow as tf
+import random
 
 pickle_file = 'notMNIST.pickle'
 
@@ -42,10 +43,14 @@ def accuracy(predictions, labels):
           / predictions.shape[0])
 
 
-batch_size = 16
+batch_size = 128
 patch_size = 5
 depth = 16
 num_hidden = 64
+starting_learning_rate = 0.05
+decay_steps = 300
+decay_rate = 0.96
+num_steps = 2001
 
 graph = tf.Graph()
 
@@ -92,23 +97,30 @@ with graph.as_default():
   loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels))
     
   # Optimizer.
-  optimizer = tf.train.GradientDescentOptimizer(0.05).minimize(loss)
-  
+  #optimizer = tf.train.GradientDescentOptimizer(starting_learning_rate).minimize(loss)
+  global_step = tf.Variable(0,trainable=False)  # count the number of steps taken.
+  learning_rate = tf.train.exponential_decay(starting_learning_rate, global_step, decay_steps, decay_rate)
+  optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
+
   # Predictions for the training, validation, and test data.
   train_prediction = tf.nn.softmax(logits)
   valid_prediction = tf.nn.softmax(model(tf_valid_dataset))
   test_prediction = tf.nn.softmax(model(tf_test_dataset))
 
 
-num_steps = 1001
-
 with tf.Session(graph=graph) as session:
   tf.initialize_all_variables().run()
   print "Initialized"
   for step in xrange(num_steps):
-    offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
-    batch_data = train_dataset[offset:(offset + batch_size), :, :, :]
-    batch_labels = train_labels[offset:(offset + batch_size), :]
+
+    #offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
+    #batch_data = train_dataset[offset:(offset + batch_size), :, :, :]
+    #batch_labels = train_labels[offset:(offset + batch_size), :]
+
+    index = random.sample(xrange(train_dataset.shape[0]), batch_size)
+    batch_data = train_dataset[index,:,:,:]
+    batch_labels = train_labels[index,:]
+
     feed_dict = {tf_train_dataset : batch_data, tf_train_labels : batch_labels}
     _, l, predictions = session.run(
       [optimizer, loss, train_prediction], feed_dict=feed_dict)

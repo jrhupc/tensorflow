@@ -4,6 +4,7 @@ import numpy as np
 import tensorflow as tf
 from six.moves import cPickle as pickle
 from six.moves import range
+import random
 
 pickle_file = 'notMNIST.pickle'
 
@@ -24,11 +25,13 @@ with open(pickle_file, 'rb') as f:
 image_size = 28
 hidden1_nodes = 1024
 num_labels = 10
-beta = 0.01
+beta = 0.001
 starting_learning_rate = 0.5
-batch_size = 128
+decay_steps = 300
+decay_rate = 0.96
+batch_size = 256
 num_steps = 3001
-num_steps = 3001
+num_steps = 12001
 
 def reformat(dataset, labels):
   dataset = dataset.reshape((-1, image_size * image_size)).astype(np.float32)
@@ -66,16 +69,17 @@ with graph.as_default():
   biases2 = tf.Variable(tf.zeros([num_labels]))
   
   # Training computation.
-  layer1 = tf.nn.dropout(tf.nn.relu(tf.matmul(tf_train_dataset, weights1) + biases1),0.5)
+  #layer1 = tf.nn.dropout(tf.nn.relu(tf.matmul(tf_train_dataset, weights1) + biases1),0.5)
+  layer1 = tf.nn.relu(tf.matmul(tf_train_dataset, weights1) + biases1)
   logits = tf.matmul(layer1,weights2) + biases2
   
   loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, tf_train_labels)) + beta*tf.nn.l2_loss(weights1) + beta*tf.nn.l2_loss(weights2)
   
   # Optimizer.
-  #global_step = tf.Variable(0,trainable=False)  # count the number of steps taken.
-  #learning_rate = tf.train.exponential_decay(starting_learning_rate, global_step, num_steps, 0.96)
-  #optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
-  optimizer = tf.train.GradientDescentOptimizer(starting_learning_rate).minimize(loss)
+  #optimizer = tf.train.GradientDescentOptimizer(starting_learning_rate).minimize(loss)
+  global_step = tf.Variable(0,trainable=False)  # count the number of steps taken.
+  learning_rate = tf.train.exponential_decay(starting_learning_rate, global_step, decay_steps, decay_rate)
+  optimizer = tf.train.GradientDescentOptimizer(learning_rate).minimize(loss, global_step=global_step)
   
   # Predictions for the training, validation, and test data.
   train_prediction = tf.nn.softmax(logits)
@@ -92,10 +96,15 @@ with tf.Session(graph=graph) as session:
   for step in range(num_steps):
     # Pick an offset within the training data, which has been randomized.
     # Note: we could use better randomization across epochs.
-    offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
+    #offset = (step * batch_size) % (train_labels.shape[0] - batch_size)
     # Generate a minibatch.
-    batch_data = train_dataset[offset:(offset + batch_size), :]
-    batch_labels = train_labels[offset:(offset + batch_size), :]
+    #batch_data = train_dataset[offset:(offset + batch_size), :]
+    #batch_labels = train_labels[offset:(offset + batch_size), :]
+    
+    index = random.sample(xrange(len(train_dataset)), batch_size)
+    batch_data = train_dataset[index]
+    batch_labels = train_labels[index]
+    
     # Prepare a dictionary telling the session where to feed the minibatch.
     # The key of the dictionary is the placeholder node of the graph to be fed,
     # and the value is the numpy array to feed to it.
